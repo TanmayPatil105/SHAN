@@ -103,7 +103,6 @@ sampling_configure = {"batch_size": 20}
 def setup(args):
     args.update(default_configure)
     set_random_seed(args["seed"])
-    args["dataset"] = "ACMRaw" if args["hetero"] else "ACM"
     args["device"] = "cuda:0" if torch.cuda.is_available() else "cpu"
     args["log_dir"] = setup_log_dir(args)
     return args
@@ -125,65 +124,6 @@ def get_binary_mask(total_size, indices):
 
 
 def load_acm(remove_self_loop):
-    url = "dataset/ACM3025.pkl"
-    data_path = get_download_dir() + "/ACM3025.pkl"
-    download(_get_dgl_url(url), path=data_path)
-
-    with open(data_path, "rb") as f:
-        data = pickle.load(f)
-
-    labels, features = (
-        torch.from_numpy(data["label"].todense()).long(),
-        torch.from_numpy(data["feature"].todense()).float(),
-    )
-    num_classes = labels.shape[1]
-    labels = labels.nonzero()[:, 1]
-
-    if remove_self_loop:
-        num_nodes = data["label"].shape[0]
-        data["PAP"] = sparse.csr_matrix(data["PAP"] - np.eye(num_nodes))
-        data["PLP"] = sparse.csr_matrix(data["PLP"] - np.eye(num_nodes))
-
-    # Adjacency matrices for meta path based neighbors
-    # (Mufei): I verified both of them are binary adjacency matrices with self loops
-    author_g = dgl.from_scipy(data["PAP"])
-    subject_g = dgl.from_scipy(data["PLP"])
-    gs = [author_g, subject_g]
-
-    train_idx = torch.from_numpy(data["train_idx"]).long().squeeze(0)
-    val_idx = torch.from_numpy(data["val_idx"]).long().squeeze(0)
-    test_idx = torch.from_numpy(data["test_idx"]).long().squeeze(0)
-
-    num_nodes = author_g.num_nodes()
-    train_mask = get_binary_mask(num_nodes, train_idx)
-    val_mask = get_binary_mask(num_nodes, val_idx)
-    test_mask = get_binary_mask(num_nodes, test_idx)
-
-    print("dataset loaded")
-    pprint(
-        {
-            "dataset": "ACM",
-            "train": train_mask.sum().item() / num_nodes,
-            "val": val_mask.sum().item() / num_nodes,
-            "test": test_mask.sum().item() / num_nodes,
-        }
-    )
-
-    return (
-        gs,
-        features,
-        labels,
-        num_classes,
-        train_idx,
-        val_idx,
-        test_idx,
-        train_mask,
-        val_mask,
-        test_mask,
-    )
-
-
-def load_acm_raw(remove_self_loop):
     assert not remove_self_loop
     url = "dataset/ACM.mat"
     data_path = get_download_dir() + "/ACM.mat"
@@ -260,16 +200,14 @@ def load_acm_raw(remove_self_loop):
 def load_data(dataset, remove_self_loop=False):
     if dataset == "ACM":
         return load_acm(remove_self_loop)
-    elif dataset == "ACMRaw":
-        return load_acm_raw(remove_self_loop)
     else:
-        return NotImplementedError("Unsupported dataset {}".format(dataset))
+        raise NotImplementedError("Unsupported dataset {}".format(dataset))
 
 
 class EarlyStopping(object):
     def __init__(self, patience=10):
         dt = datetime.datetime.now()
-        self.filename = "early_stop_{}_{:02d}-{:02d}-{:02d}.pth".format(
+        self.filename = "stop/early_stop_{}_{:02d}-{:02d}-{:02d}.pth".format(
             dt.date(), dt.hour, dt.minute, dt.second
         )
         self.patience = patience

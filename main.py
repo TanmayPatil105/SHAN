@@ -1,5 +1,6 @@
 import torch
 from sklearn.metrics import f1_score
+from model_hetero import HAN
 from utils import EarlyStopping, load_data
 
 
@@ -26,8 +27,7 @@ def evaluate(model, g, features, labels, mask, loss_func):
 
 
 def main(args):
-    # If args['hetero'] is True, g would be a heterogeneous graph.
-    # Otherwise, it will be a list of homogeneous graphs.
+    # Heterogenous graph
     (
         g,
         features,
@@ -52,30 +52,16 @@ def main(args):
     val_mask = val_mask.to(args["device"])
     test_mask = test_mask.to(args["device"])
 
-    if args["hetero"]:
-        from model_hetero import HAN
 
-        model = HAN(
-            meta_paths=[["pa", "ap"], ["pf", "fp"]],
-            in_size=features.shape[1],
-            hidden_size=args["hidden_units"],
-            out_size=num_classes,
-            num_heads=args["num_heads"],
-            dropout=args["dropout"],
-        ).to(args["device"])
-        g = g.to(args["device"])
-    else:
-        from model import HAN
-
-        model = HAN(
-            num_meta_paths=len(g),
-            in_size=features.shape[1],
-            hidden_size=args["hidden_units"],
-            out_size=num_classes,
-            num_heads=args["num_heads"],
-            dropout=args["dropout"],
-        ).to(args["device"])
-        g = [graph.to(args["device"]) for graph in g]
+    model = HAN(
+        meta_paths=[["pa", "ap"], ["pf", "fp"]],
+        in_size=features.shape[1],
+        hidden_size=args["hidden_units"],
+        out_size=num_classes,
+        num_heads=args["num_heads"],
+        dropout=args["dropout"],
+    ).to(args["device"])
+    g = g.to(args["device"])
 
     stopper = EarlyStopping(patience=args["patience"])
     loss_fcn = torch.nn.CrossEntropyLoss()
@@ -146,6 +132,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Use metapath coalescing with DGL's own dataset",
     )
+    parser.add_argument(
+        "--dataset", type=str, default="ACM",
+        help="dataset name"
+    )
+
     args = parser.parse_args().__dict__
 
     args = setup(args)
