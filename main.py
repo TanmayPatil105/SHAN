@@ -52,16 +52,24 @@ def main(args):
     val_mask = val_mask.to(args["device"])
     test_mask = test_mask.to(args["device"])
 
+    if args["dataset"] == "ACM":
+        meta_paths = [["pa", "ap"], ["pf", "fp"]]
+    elif args["dataset"] == "DBLP":
+        meta_paths = [["ap", "pa"], ["ap", "pt", "tp", "pa"], ["ap", "pc", "cp","pa"]]
+    elif args["dataset"] == "IMDB":
+        meta_paths = [["ma", "am"], ["md", "dm"]]
 
     model = HAN(
-        meta_paths=[["pa", "ap"], ["pf", "fp"]],
+        meta_paths=meta_paths,
         in_size=features.shape[1],
         hidden_size=args["hidden_units"],
         out_size=num_classes,
         num_heads=args["num_heads"],
         dropout=args["dropout"],
     ).to(args["device"])
+
     g = g.to(args["device"])
+    print (g)
 
     stopper = EarlyStopping(patience=args["patience"])
     loss_fcn = torch.nn.CrossEntropyLoss()

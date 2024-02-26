@@ -123,11 +123,62 @@ def get_binary_mask(total_size, indices):
     return mask.byte()
 
 
+def load_dblp(remove_self_loop):
+    assert not remove_self_loop
+
+    data_path = get_download_dir() + "/DBLP.mat"
+    if not os.path.isfile (data_path):
+        download(_get_dgl_url(url), path=data_path)
+
+    data = sio.loadmat(data_path)
+
+    label = data['label']
+    train_idx = data['train_idx'][0]
+    val_idx = data['val_idx'][0]
+    test_idx = data['test_idx'][0]
+    features = data['features']
+    net_APA = data['net_APA']
+    net_APTPA = data['net_APTPA']
+    net_APCPA = data['net_APCPA']
+
+    hg = dgl.heterograph({
+        ('author', 'ap', 'paper'): net_APA.nonzero(),
+        ('paper', 'pa', 'author'): net_APA.transpose().nonzero(),
+        ('paper', 'pt', 'terms'): net_APTPA.nonzero(),
+        ('terms', 'tp', 'paper'): net_APTPA.transpose().nonzero(),
+        ('paper', 'pc', 'conference'): net_APCPA.nonzero(),
+        ('conference', 'cp', 'paper'): net_APCPA.transpose().nonzero()
+    })
+
+    features = torch.FloatTensor(features)
+    num_classes = label.shape[1]
+    labels = torch.FloatTensor(label)
+    labels = torch.argmax(labels, dim=1)
+
+    num_nodes = hg.num_nodes('paper')
+    train_mask = get_binary_mask(num_nodes, train_idx)
+    val_mask = get_binary_mask(num_nodes, val_idx)
+    test_mask = get_binary_mask(num_nodes, test_idx)
+
+    return (
+        hg,
+        features,
+        labels,
+        num_classes,
+        train_idx,
+        val_idx,
+        test_idx,
+        train_mask,
+        val_mask,
+        test_mask,
+    )
+
 def load_acm(remove_self_loop):
     assert not remove_self_loop
     url = "dataset/ACM.mat"
     data_path = get_download_dir() + "/ACM.mat"
-    download(_get_dgl_url(url), path=data_path)
+    if not os.path.isfile (data_path):
+        download(_get_dgl_url(url), path=data_path)
 
     data = sio.loadmat(data_path)
     p_vs_l = data["PvsL"]  # paper-field?
@@ -196,10 +247,62 @@ def load_acm(remove_self_loop):
         test_mask,
     )
 
+def load_imdb (remove_self_loop):
+    assert not remove_self_loop
+
+    data_path = get_download_dir() + "/imdb.mat"
+    if not os.path.isfile (data_path):
+        download(_get_dgl_url(url), path=data_path)
+
+    data = sio.loadmat(data_path)
+
+    label = data['label']
+    train_idx = data['train_idx'][0]
+    val_idx = data['val_idx'][0]
+    test_idx = data['test_idx'][0]
+    features = data['feature']
+    MAM = data['MAM']
+    MDM = data['MDM']
+
+    hg = dgl.heterograph(
+        {
+            ("movie", "ma", "actor"): MAM.nonzero(),
+            ("actor", "am", "movie"): MAM.transpose().nonzero(),
+            ("movie", "md", "director"): MDM.nonzero(),
+            ("director", "dm", "movie"): MDM.transpose().nonzero(),
+        }
+    )
+
+    features = torch.FloatTensor(features)
+    num_classes = label.shape[1]
+    labels = torch.FloatTensor(label)
+    labels = torch.argmax(labels, dim=1)
+
+    num_nodes = hg.num_nodes('actor')
+    train_mask = get_binary_mask(num_nodes, train_idx)
+    val_mask = get_binary_mask(num_nodes, val_idx)
+    test_mask = get_binary_mask(num_nodes, test_idx)
+
+    return (
+        hg,
+        features,
+        labels,
+        num_classes,
+        train_idx,
+        val_idx,
+        test_idx,
+        train_mask,
+        val_mask,
+        test_mask,
+    )
 
 def load_data(dataset, remove_self_loop=False):
     if dataset == "ACM":
         return load_acm(remove_self_loop)
+    elif dataset == "DBLP":
+        return load_dblp(remove_self_loop)
+    elif dataset == "IMDB":
+        return load_imdb(remove_self_loop)
     else:
         raise NotImplementedError("Unsupported dataset {}".format(dataset))
 
