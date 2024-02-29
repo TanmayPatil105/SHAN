@@ -11,7 +11,7 @@ import dgl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from dgl.nn.pytorch import GATConv
+from sgat import SGATConv
 
 
 class SemanticAttention(nn.Module):
@@ -64,7 +64,7 @@ class HANLayer(nn.Module):
         self.gat_layers = nn.ModuleList()
         for i in range(len(meta_paths)):
             self.gat_layers.append(
-                GATConv(
+                SGATConv(
                     in_size,
                     out_size,
                     layer_num_heads,

@@ -10,6 +10,7 @@ import dgl
 import numpy as np
 import torch
 from dgl.data.utils import _get_dgl_url, download, get_download_dir
+import pickle as pkl
 from scipy import io as sio, sparse
 
 
@@ -181,6 +182,7 @@ def load_acm(remove_self_loop):
         download(_get_dgl_url(url), path=data_path)
 
     data = sio.loadmat(data_path)
+
     p_vs_l = data["PvsL"]  # paper-field?
     p_vs_a = data["PvsA"]  # paper-author
     p_vs_t = data["PvsT"]  # paper-term, bag of words
@@ -250,11 +252,11 @@ def load_acm(remove_self_loop):
 def load_imdb (remove_self_loop):
     assert not remove_self_loop
 
-    data_path = get_download_dir() + "/imdb.mat"
+    data_path = get_download_dir() + "/imdb.pkl"
     if not os.path.isfile (data_path):
         download(_get_dgl_url(url), path=data_path)
 
-    data = sio.loadmat(data_path)
+    data = pkl.load(open(data_path, "rb"))
 
     label = data['label']
     train_idx = data['train_idx'][0]
