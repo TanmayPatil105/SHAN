@@ -1,11 +1,41 @@
 import torch as th
 from torch import nn
 
+import numpy as np
+import torch.nn.functional as F
 from dgl import function as fn
 from dgl._ffi.base import DGLError
 from dgl.utils import expand_as_pair
 from dgl.nn.functional import edge_softmax
 from dgl.nn.pytorch.utils import Identity
+
+
+sig = nn.Sigmoid()
+hardtanh = nn.Hardtanh(0,1)
+gamma = -0.1
+zeta = 1.1
+beta = 0.66
+eps = 1e-20
+const1 = beta*np.log(-gamma/zeta + eps)
+
+def l0_train(logAlpha, min, max):
+    U = th.rand(logAlpha.size()).type_as(logAlpha) + eps
+    s = sig((th.log(U / (1 - U)) + logAlpha) / beta)
+    s_bar = s * (zeta - gamma) + gamma
+
+    # @values : [ 0 - 1]
+    mask = F.hardtanh(s_bar, min, max)
+    return mask
+
+def l0_test(logAlpha, min, max):
+    s = sig(logAlpha/beta)
+    s_bar = s * (zeta - gamma) + gamma
+    mask = F.hardtanh(s_bar, min, max)
+    return mask
+
+def get_loss2(logAlpha):
+    return sig(logAlpha - const1)
+
 
 class SGATConv(nn.Module):
     def __init__(
@@ -106,47 +136,43 @@ class SGATConv(nn.Module):
                         "suppress the check and let the code run."
                     )
 
-            if isinstance(feat, tuple):
-                src_prefix_shape = feat[0].shape[:-1]
-                dst_prefix_shape = feat[1].shape[:-1]
-                h_src = self.feat_drop(feat[0])
-                h_dst = self.feat_drop(feat[1])
-                if not hasattr(self, "fc_src"):
-                    feat_src = self.fc(h_src).view(
-                        *src_prefix_shape, self._num_heads, self._out_feats
-                    )
-                    feat_dst = self.fc(h_dst).view(
-                        *dst_prefix_shape, self._num_heads, self._out_feats
-                    )
-                else:
-                    feat_src = self.fc_src(h_src).view(
-                        *src_prefix_shape, self._num_heads, self._out_feats
-                    )
-                    feat_dst = self.fc_dst(h_dst).view(
-                        *dst_prefix_shape, self._num_heads, self._out_feats
-                    )
-            else:
-                src_prefix_shape = dst_prefix_shape = feat.shape[:-1]
-                h_src = h_dst = self.feat_drop(feat)
-                feat_src = feat_dst = self.fc(h_src).view(
-                    *src_prefix_shape, self._num_heads, self._out_feats
-                )
-                if graph.is_block:
-                    feat_dst = feat_src[: graph.number_of_dst_nodes()]
-                    h_dst = h_dst[: graph.number_of_dst_nodes()]
-                    dst_prefix_shape = (
-                        graph.number_of_dst_nodes(),
-                    ) + dst_prefix_shape[1:]
+            # Transformation Matrix Tφi
+            src_prefix_shape = dst_prefix_shape = feat.shape[:-1]
+            h_src = h_dst = self.feat_drop(feat)
+            feat_src = feat_dst = self.fc(h_src).view(
+                *src_prefix_shape, self._num_heads, self._out_feats
+            )
+            if graph.is_block:
+                feat_dst = feat_src[: graph.number_of_dst_nodes()]
+                h_dst = h_dst[: graph.number_of_dst_nodes()]
+                dst_prefix_shape = (
+                    graph.number_of_dst_nodes(),
+                ) + dst_prefix_shape[1:]
 
+            """
+            attn_l   ->   Wh_i
+            attn_r   ->   Wh_j
+            feat_src ->   h_i`
+            feat_dst ->   h_j`
+            """
             el = (feat_src * self.attn_l).sum(dim=-1).unsqueeze(-1)
             er = (feat_dst * self.attn_r).sum(dim=-1).unsqueeze(-1)
             graph.srcdata.update({"ft": feat_src, "el": el})
             graph.dstdata.update({"er": er})
             
             # compute edge attention, el and er are a_l Wh_i and a_r Wh_j respectively.
+
+            """
+            Heterogeneous graph
+
+            for edge_type in graph.edge_types():
+                attention = edge_attention (graph, edge_type)
+                graph.apply_edges (attention, edge_type=edge_type)
+            """
+
             graph.apply_edges(fn.u_add_v("el", "er", "e"))
             e = self.leaky_relu(graph.edata.pop("e"))
-            
+
             # compute softmax
             graph.edata["a"] = self.attn_drop(edge_softmax(graph, e))
             if edge_weight is not None:
@@ -182,3 +208,15 @@ class SGATConv(nn.Module):
                 return rst, graph.edata["a"]
             else:
                 return rst
+
+    def edge_attention(self, edges):
+        tmp = edges.src['el'] + edges.dst['er']
+        logits = tmp
+
+        if self.training:
+            m = l0_train(tmp, 0, 1)
+        else:
+            m = l0_test(tmp, 0, 1)
+            self.loss = get_loss2(logits[:,0,:]).sum()
+
+        return {'e': m}
