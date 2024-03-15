@@ -53,12 +53,16 @@ def main(args):
     val_mask = val_mask.to(args["device"])
     test_mask = test_mask.to(args["device"])
 
+    num_heads = []
+    for i in range (0, args["num_heads"]):
+        num_heads.append (8)
+
     model = HAN(
         meta_paths=meta_paths,
         in_size=features.shape[1],
         hidden_size=args["hidden_units"],
         out_size=num_classes,
-        num_heads=args["num_heads"],
+        num_heads=num_heads,
         dropout=args["dropout"],
     ).to(args["device"])
 
@@ -138,6 +142,20 @@ if __name__ == "__main__":
         "--dataset", type=str, default="ACM",
         help="dataset name"
     )
+    parser.add_argument("--lr", type=float, default=0.005,
+                        help="learning rate")
+    parser.add_argument('--weight-decay', type=float, default=0.001,
+                        help="weight decay")
+    parser.add_argument("--num-epochs", type=int, default=200,
+                        help="number of epochs")
+    parser.add_argument('--num-heads', type=int, default=1,
+                        help="number of heads")
+    parser.add_argument("--hidden-units", type=int, default=8,
+                        help="number of hidden units")
+    parser.add_argument('--dropout', type=float, default=0.6,
+                        help="attention dropout")
+    parser.add_argument("--patience", type=int, default=100,
+                        help="early stopping patience value")
 
     args = parser.parse_args().__dict__
 

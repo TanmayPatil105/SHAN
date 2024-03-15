@@ -87,22 +87,10 @@ def setup_log_dir(args, sampling=False):
     return log_dir
 
 
-# The configuration below is from the paper.
-default_configure = {
-    "lr": 0.005,  # Learning rate
-    "num_heads": [8],  # Number of attention heads for node-level attention
-    "hidden_units": 8,
-    "dropout": 0.6,
-    "weight_decay": 0.001,
-    "num_epochs": 200,
-    "patience": 100,
-}
-
 sampling_configure = {"batch_size": 20}
 
 
 def setup(args):
-    args.update(default_configure)
     set_random_seed(args["seed"])
     args["device"] = "cuda:1" if torch.cuda.is_available() else "cpu"
     args["log_dir"] = setup_log_dir(args)
