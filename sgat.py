@@ -121,9 +121,11 @@ class SGATConv(nn.Module):
         self._allow_zero_in_degree = set_value
 
     def forward(self, graph, feat, edge_weight=None, get_attention=False):
-        with graph.local_scope():
+        self.graph = graph
+
+        with self.graph.local_scope():
             if not self._allow_zero_in_degree:
-                if (graph.in_degrees() == 0).any():
+                if (self.graph.in_degrees() == 0).any():
                     raise DGLError(
                         "There are 0-in-degree nodes in the graph, "
                         "output for those nodes will be invalid. "
@@ -142,11 +144,11 @@ class SGATConv(nn.Module):
             feat_src = feat_dst = self.fc(h_src).view(
                 *src_prefix_shape, self._num_heads, self._out_feats
             )
-            if graph.is_block:
-                feat_dst = feat_src[: graph.number_of_dst_nodes()]
-                h_dst = h_dst[: graph.number_of_dst_nodes()]
+            if self.graph.is_block:
+                feat_dst = feat_src[: self.graph.number_of_dst_nodes()]
+                h_dst = h_dst[: self.graph.number_of_dst_nodes()]
                 dst_prefix_shape = (
-                    graph.number_of_dst_nodes(),
+                    self.graph.number_of_dst_nodes(),
                 ) + dst_prefix_shape[1:]
 
             """
@@ -157,32 +159,24 @@ class SGATConv(nn.Module):
             """
             el = (feat_src * self.attn_l).sum(dim=-1).unsqueeze(-1)
             er = (feat_dst * self.attn_r).sum(dim=-1).unsqueeze(-1)
-            graph.srcdata.update({"ft": feat_src, "el": el})
-            graph.dstdata.update({"er": er})
+            self.graph.srcdata.update({"ft": feat_src, "el": el})
+            self.graph.dstdata.update({"er": er})
             
             # compute edge attention, el and er are a_l Wh_i and a_r Wh_j respectively.
 
-            """
-            Heterogeneous graph
-
-            for edge_type in graph.edge_types():
-                attention = edge_attention (graph, edge_type)
-                graph.apply_edges (attention, edge_type=edge_type)
-            """
-
-            graph.apply_edges(fn.u_add_v("el", "er", "e"))
-            e = self.leaky_relu(graph.edata.pop("e"))
+            self.graph.apply_edges(fn.u_add_v("el", "er", "e"))
+            e = self.leaky_relu(self.graph.edata.pop("e"))
 
             # compute softmax
-            graph.edata["a"] = self.attn_drop(edge_softmax(graph, e))
+            self.graph.edata["a"] = self.attn_drop(edge_softmax(graph, e))
             if edge_weight is not None:
-                graph.edata["a"] = graph.edata["a"] * edge_weight.tile(
+                self.graph.edata["a"] = self.graph.edata["a"] * edge_weight.tile(
                     1, self._num_heads, 1
                 ).transpose(0, 2)
             
             # message passing
-            graph.update_all(fn.u_mul_e("ft", "a", "m"), fn.sum("m", "ft"))
-            rst = graph.dstdata["ft"]
+            self.graph.update_all(fn.u_mul_e("ft", "a", "m"), fn.sum("m", "ft"))
+            rst = self.graph.dstdata["ft"]
             
             # residual
             if self.res_fc is not None:
@@ -205,7 +199,7 @@ class SGATConv(nn.Module):
                 rst = self.activation(rst)
 
             if get_attention:
-                return rst, graph.edata["a"]
+                return rst, self.graph.edata["a"]
             else:
                 return rst
 
