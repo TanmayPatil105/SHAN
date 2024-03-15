@@ -159,24 +159,19 @@ class SGATConv(nn.Module):
             """
             el = (feat_src * self.attn_l).sum(dim=-1).unsqueeze(-1)
             er = (feat_dst * self.attn_r).sum(dim=-1).unsqueeze(-1)
-            self.graph.srcdata.update({"ft": feat_src, "el": el})
-            self.graph.dstdata.update({"er": er})
+            self.graph.srcdata.update({'ft': feat_src, 'el': el})
+            self.graph.dstdata.update({'er': er})
             
             # compute edge attention, el and er are a_l Wh_i and a_r Wh_j respectively.
+            self.graph.apply_edges(self.edge_attention)
 
-            self.graph.apply_edges(fn.u_add_v("el", "er", "e"))
-            e = self.leaky_relu(self.graph.edata.pop("e"))
+            # compute attention
+            self.edge_softmax()
 
-            # compute softmax
-            self.graph.edata["a"] = self.attn_drop(edge_softmax(graph, e))
-            if edge_weight is not None:
-                self.graph.edata["a"] = self.graph.edata["a"] * edge_weight.tile(
-                    1, self._num_heads, 1
-                ).transpose(0, 2)
-            
             # message passing
-            self.graph.update_all(fn.u_mul_e("ft", "a", "m"), fn.sum("m", "ft"))
-            rst = self.graph.dstdata["ft"]
+            self.graph.edata['a_drop'] = self.attn_drop(self.graph.edata['a'])
+            self.graph.update_all(fn.u_mul_e('ft', 'a_drop', 'ft'), fn.sum('ft', 'ft'))
+            rst = self.graph.ndata['ft']
             
             # residual
             if self.res_fc is not None:
@@ -199,9 +194,14 @@ class SGATConv(nn.Module):
                 rst = self.activation(rst)
 
             if get_attention:
-                return rst, self.graph.edata["a"]
+                return rst, self.graph.edata['a']
             else:
                 return rst
+
+    def norm(self, edges):
+        # normalize attention
+        a = edges.data['a'] / edges.dst['z']
+        return {'a' : a}
 
     def edge_attention(self, edges):
         tmp = edges.src['el'] + edges.dst['er']
@@ -214,3 +214,19 @@ class SGATConv(nn.Module):
             self.loss = get_loss2(logits[:,0,:]).sum()
 
         return {'e': m}
+
+    def normalize(self, logits):
+        self._logits_name = "_logits"
+        self._normalizer_name = "_norm"
+        self.graph.edata[self._logits_name] = logits
+
+        self.graph.update_all(fn.copy_e(self._logits_name, self._logits_name),
+                          fn.sum(self._logits_name, self._normalizer_name))
+
+        return self.graph.edata.pop(self._logits_name), self.graph.ndata.pop(self._normalizer_name)
+
+    def edge_softmax(self):
+        scores, normalizer = self.normalize(self.graph.edata.pop('e'))
+        self.graph.ndata['z'] = normalizer[:,0,:].unsqueeze(1)
+
+        self.graph.edata['a'] = scores[:,0,:].unsqueeze(1)
