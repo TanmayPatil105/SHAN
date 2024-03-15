@@ -104,7 +104,7 @@ sampling_configure = {"batch_size": 20}
 def setup(args):
     args.update(default_configure)
     set_random_seed(args["seed"])
-    args["device"] = "cuda:0" if torch.cuda.is_available() else "cpu"
+    args["device"] = "cuda:1" if torch.cuda.is_available() else "cpu"
     args["log_dir"] = setup_log_dir(args)
     return args
 
@@ -161,6 +161,8 @@ def load_dblp(remove_self_loop):
     val_mask = get_binary_mask(num_nodes, val_idx)
     test_mask = get_binary_mask(num_nodes, test_idx)
 
+    meta_paths = [["ap", "pa"], ["ap", "pt", "tp", "pa"], ["ap", "pc", "cp","pa"]]
+
     return (
         hg,
         features,
@@ -172,6 +174,7 @@ def load_dblp(remove_self_loop):
         train_mask,
         val_mask,
         test_mask,
+        meta_paths,
     )
 
 def load_acm(remove_self_loop):
@@ -236,6 +239,8 @@ def load_acm(remove_self_loop):
     val_mask = get_binary_mask(num_nodes, val_idx)
     test_mask = get_binary_mask(num_nodes, test_idx)
 
+    meta_paths = [["pa", "ap"], ["pf", "fp"]]
+
     return (
         hg,
         features,
@@ -247,6 +252,7 @@ def load_acm(remove_self_loop):
         train_mask,
         val_mask,
         test_mask,
+        meta_paths,
     )
 
 def load_imdb (remove_self_loop):
@@ -285,6 +291,8 @@ def load_imdb (remove_self_loop):
     val_mask = get_binary_mask(num_nodes, val_idx)
     test_mask = get_binary_mask(num_nodes, test_idx)
 
+    meta_paths = [["ma", "am"], ["md", "dm"]]
+
     return (
         hg,
         features,
@@ -296,6 +304,7 @@ def load_imdb (remove_self_loop):
         train_mask,
         val_mask,
         test_mask,
+        meta_paths,
     )
 
 def load_data(dataset, remove_self_loop=False):

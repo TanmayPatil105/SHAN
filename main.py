@@ -39,6 +39,7 @@ def main(args):
         train_mask,
         val_mask,
         test_mask,
+        meta_paths,
     ) = load_data(args["dataset"])
 
     if hasattr(torch, "BoolTensor"):
@@ -51,13 +52,6 @@ def main(args):
     train_mask = train_mask.to(args["device"])
     val_mask = val_mask.to(args["device"])
     test_mask = test_mask.to(args["device"])
-
-    if args["dataset"] == "ACM":
-        meta_paths = [["pa", "ap"], ["pf", "fp"]]
-    elif args["dataset"] == "DBLP":
-        meta_paths = [["ap", "pa"], ["ap", "pt", "tp", "pa"], ["ap", "pc", "cp","pa"]]
-    elif args["dataset"] == "IMDB":
-        meta_paths = [["ma", "am"], ["md", "dm"]]
 
     model = HAN(
         meta_paths=meta_paths,
