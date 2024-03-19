@@ -61,9 +61,11 @@ class HANLayer(nn.Module):
         super(HANLayer, self).__init__()
 
         # One GAT layer for each meta path based adjacency matrix
-        self.gat_layers = nn.ModuleList()
+        self.meta_path_based_gat_layers = nn.ModuleDict()
+
         for i in range(len(meta_paths)):
-            self.gat_layers.append(
+            self.meta_path_based_gat_layers[str(i)] = nn.ModuleList()
+            self.meta_path_based_gat_layers[str(i)].append(
                 SGATConv(
                     in_size,
                     out_size,
@@ -74,6 +76,7 @@ class HANLayer(nn.Module):
                     allow_zero_in_degree=True,
                 )
             )
+
         self.semantic_attention = SemanticAttention(
             in_size=out_size * layer_num_heads
         )
@@ -95,7 +98,7 @@ class HANLayer(nn.Module):
 
         for i, meta_path in enumerate(self.meta_paths):
             new_g = self._cached_coalesced_graph[meta_path]
-            semantic_embeddings.append(self.gat_layers[i](new_g, h).flatten(1))
+            semantic_embeddings.append(self.meta_path_based_gat_layers[str(i)][0](new_g, h).flatten(1))
         semantic_embeddings = torch.stack(
             semantic_embeddings, dim=1
         )  # (N, M, D * K)
