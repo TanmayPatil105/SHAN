@@ -50,12 +50,14 @@ class SGATConv(nn.Module):
         activation=None,
         allow_zero_in_degree=False,
         bias=True,
+        skip=False,
     ):
         super(SGATConv, self).__init__()
         self._num_heads = num_heads
         self._in_src_feats, self._in_dst_feats = expand_as_pair(in_feats)
         self._out_feats = out_feats
         self._allow_zero_in_degree = allow_zero_in_degree
+        self.skip = skip
         if isinstance(in_feats, tuple):
             self.fc_src = nn.Linear(
                 self._in_src_feats, out_feats * num_heads, bias=False
@@ -161,16 +163,21 @@ class SGATConv(nn.Module):
             er = (feat_dst * self.attn_r).sum(dim=-1).unsqueeze(-1)
             self.graph.srcdata.update({'ft': feat_src, 'el': el})
             self.graph.dstdata.update({'er': er})
-            
-            # compute edge attention, el and er are a_l Wh_i and a_r Wh_j respectively.
-            self.graph.apply_edges(self.edge_attention)
 
-            # compute attention
-            self.edge_softmax()
+            if self.skip == False:
+                # compute edge attention, el and er are a_l Wh_i and a_r Wh_j respectively.
+                self.graph.apply_edges(self.edge_attention)
+
+                # compute attention
+                self.edge_softmax()
+
+                edges = self.graph.edata['a'].squeeze().nonzero().squeeze()
+
+                self.graph.apply_edges(self.edge_attention)
 
             # message passing
             self.graph.edata['a_drop'] = self.attn_drop(self.graph.edata['a'])
-            self.graph.update_all(fn.u_mul_e('ft', 'a_drop', 'ft'), fn.sum('ft', 'ft'))
+            self.graph.update_all(fn.u_mul_e('ft', 'a', 'ft'), fn.sum('ft', 'ft'))
             rst = self.graph.ndata['ft']
             
             # residual
@@ -193,10 +200,7 @@ class SGATConv(nn.Module):
             if self.activation:
                 rst = self.activation(rst)
 
-            if get_attention:
-                return rst, self.graph.edata['a']
-            else:
-                return rst
+            return rst
 
     def norm(self, edges):
         # normalize attention
@@ -204,13 +208,12 @@ class SGATConv(nn.Module):
         return {'a' : a}
 
     def edge_attention(self, edges):
-        tmp = edges.src['el'] + edges.dst['er']
-        logits = tmp
+        logits = edges.src['el'] + edges.dst['er']
 
         if self.training:
-            m = l0_train(tmp, 0, 1)
+            m = l0_train(logits, 0, 1)
         else:
-            m = l0_test(tmp, 0, 1)
+            m = l0_test(logits, 0, 1)
             self.loss = get_loss2(logits[:,0,:]).sum()
 
         return {'e': m}

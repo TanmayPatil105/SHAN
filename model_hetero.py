@@ -74,6 +74,7 @@ class HANLayer(nn.Module):
                     dropout,
                     activation=F.elu,
                     allow_zero_in_degree=True,
+                    skip=False,
                 )
             )
 
@@ -97,8 +98,14 @@ class HANLayer(nn.Module):
                 ] = dgl.metapath_reachable_graph(g, meta_path)
 
         for i, meta_path in enumerate(self.meta_paths):
-            new_g = self._cached_coalesced_graph[meta_path]
-            semantic_embeddings.append(self.meta_path_based_gat_layers[str(i)][0](new_g, h).flatten(1))
+            g = self._cached_coalesced_graph[meta_path]
+            embedding = h
+            for gat in self.meta_path_based_gat_layers[str(i)]:
+                embedding = gat(g, embedding)
+                embedding = embedding.flatten(1)
+
+            semantic_embeddings.append(embedding)
+
         semantic_embeddings = torch.stack(
             semantic_embeddings, dim=1
         )  # (N, M, D * K)
