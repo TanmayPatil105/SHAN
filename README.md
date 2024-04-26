@@ -1,27 +1,34 @@
-# Heterogeneous Graph Attention Network (HAN) with DGL
+# Sparse Heterogeneous Graph Attention Network (SHAN)
 
-This is an attempt to implement HAN with DGL's latest APIs for heterogeneous graphs.
-The authors' implementation can be found [here](https://github.com/Jhy1993/HAN).
+We introduce SHAN, a new model designed to overcome the constraints of current models
+in handling heterogeneous graph data using the attention mechanism. By leveraging HAN
+for graph sparsification, SHAN performs node classification tasks better. The model
+effectively captures diverse and important semantics in heterogeneous graphs. The
+importance of graph sparsification for handling noisy data in these graphs is emphasized,
+contributing to its overall effectiveness. Experimentally, our architecture gives promising
+results by showing improved or almost similar accuracies compared to existing baseline models.
+In conclusion, SHAN represents a significant advancement in addressing the challenges posed by heterogeneous graphs.
+
+![t-SNE visualization showing feature representations learned on ACM dataset](images/sne-ACM.png)
 
 ## Usage
 
-`python main.py` for reproducing HAN's work on their dataset.
+```console
+$ python main.py --dataset=ACM
+$ python main.py --dataset=IMDB
+```
 
-`python main.py --hetero` for reproducing HAN's work on DGL's own dataset from
-[here](https://github.com/Jhy1993/HAN/tree/master/data/acm).  The dataset is noisy
-because there are same author occurring multiple times as different nodes.
-
-For sampling-based training, `python train_sampling.py`
+For sampling-based training:
+```console
+$ python train_sampling.py --dataset=ACM
+```
 
 ## Performance
 
-Reference performance numbers for the ACM dataset:
+| Model | micro f1 score | macro f1 score |
+| ----  | -------| ------|
+| GCN   | 88.35  | 88.29 |
+| GAT   | 87.11  | 87.33 |
+| HAN   | 90.51  | 90.63 |
+| SHAN  | 93.81  | 93.79 |
 
-|                     | micro f1 score | macro f1 score |
-| ------------------- | -------------- | -------------- |
-| Paper               | 89.22          | 89.40          |
-| DGL                 | 88.99          | 89.02          |
-| Softmax regression (own dataset) | 89.66  | 89.62     |
-| DGL (own dataset)   | 91.51          | 91.66          |
-
-We ran a softmax regression to check the easiness of our own dataset.  HAN did show some improvements.
