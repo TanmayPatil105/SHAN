@@ -177,7 +177,7 @@ class SGATConv(nn.Module):
 
             # message passing
             self.graph.edata['a_drop'] = self.attn_drop(self.graph.edata['a'])
-            self.graph.update_all(fn.u_mul_e('ft', 'a', 'ft'), fn.sum('ft', 'ft'))
+            self.graph.update_all(fn.u_mul_e('ft', 'a_drop', 'ft'), fn.sum('ft', 'ft'))
             rst = self.graph.ndata['ft']
             
             # residual

@@ -221,7 +221,7 @@ def load_subtensors(blocks, features):
 
 def main(args):
     # acm data
-    if args["dataset"] == "ACMRaw":
+    if args["dataset"] == "ACM":
         from utils import load_data
 
         (
@@ -235,8 +235,8 @@ def main(args):
             train_mask,
             val_mask,
             test_mask,
-        ) = load_data("ACMRaw")
-        metapath_list = [["pa", "ap"], ["pf", "fp"]]
+            metapath_list
+        ) = load_data("ACM")
     else:
         raise NotImplementedError(
             "Unsupported dataset {}".format(args["dataset"])
